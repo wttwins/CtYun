@@ -38,8 +38,11 @@ if (useSessionLogin)
             t.SecretKey = secretKeyEl.GetString();
         if (root.TryGetProperty("mobilephone", out var mobilePhoneEl))
             t.UserPhone = mobilePhoneEl.GetString();
+        // 关键：使用登录时的 deviceCode，保持一致性
+        if (root.TryGetProperty("deviceCode", out var deviceCodeEl))
+            t.DeviceCode = deviceCodeEl.GetString();
             
-        Console.WriteLine($"Session 登录成功: userId={t.UserId}, tenantId={t.TenantId}");
+        Console.WriteLine($"Session 登录成功: userId={t.UserId}, tenantId={t.TenantId}, deviceCode={t.DeviceCode}");
     }
     catch (Exception ex)
     {
