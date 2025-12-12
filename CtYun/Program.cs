@@ -15,13 +15,61 @@ var t = new LoginInfo()
     DeviceCode = $"web_{GenerateRandomString(32)}",
     Version = "1020700001"
 };
-if (File.Exists("connect.txt")&& Environment.GetEnvironmentVariable("LOAD_CACHE") =="1")
+
+// 检查是否存在 session.json 文件（Session 登录模式）
+bool useSessionLogin = File.Exists("session.json");
+if (useSessionLogin)
+{
+    Console.WriteLine("检测到 session.json，使用 Session 登录模式...");
+    try
+    {
+        var sessionJson = File.ReadAllText("session.json");
+        var sessionDoc = JsonDocument.Parse(sessionJson);
+        var root = sessionDoc.RootElement;
+        
+        // 从 session.json 读取登录态信息
+        if (root.TryGetProperty("userAccount", out var userAccountEl))
+            t.UserAccount = userAccountEl.GetString();
+        if (root.TryGetProperty("userId", out var userIdEl))
+            t.UserId = userIdEl.GetInt32();
+        if (root.TryGetProperty("tenantId", out var tenantIdEl))
+            t.TenantId = tenantIdEl.GetInt32();
+        if (root.TryGetProperty("secretKey", out var secretKeyEl))
+            t.SecretKey = secretKeyEl.GetString();
+        if (root.TryGetProperty("mobilephone", out var mobilePhoneEl))
+            t.UserPhone = mobilePhoneEl.GetString();
+            
+        Console.WriteLine($"Session 登录成功: userId={t.UserId}, tenantId={t.TenantId}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("session.json 解析错误: " + ex.Message);
+        return;
+    }
+}
+
+if (File.Exists("connect.txt") && Environment.GetEnvironmentVariable("LOAD_CACHE") == "1")
 {
     connectText = File.ReadAllText("connect.txt");
 }
-if (string.IsNullOrEmpty(connectText)|| connectText.IndexOf("\"desktopInfo\":null") !=-1)
+
+if (string.IsNullOrEmpty(connectText) || connectText.IndexOf("\"desktopInfo\":null") != -1)
 {
-    if (IsRunningInContainer())
+    if (useSessionLogin)
+    {
+        // Session 模式：跳过登录，直接获取设备列表
+        Console.WriteLine("使用 Session 获取设备列表...");
+        var cyApi = new CtYunApi(t);
+        t.DesktopId = await cyApi.GetLlientListAsync();
+        if (string.IsNullOrEmpty(t.DesktopId))
+        {
+            Console.WriteLine("获取设备列表失败，请检查 session.json 是否过期。");
+            return;
+        }
+        connectText = await cyApi.ConnectAsync();
+        File.WriteAllText("connect.txt", connectText);
+    }
+    else if (IsRunningInContainer())
     {
         // Docker/Linux 环境：使用环境变量
         t.UserPhone = Environment.GetEnvironmentVariable("APP_USER");
@@ -30,6 +78,20 @@ if (string.IsNullOrEmpty(connectText)|| connectText.IndexOf("\"desktopInfo\":nul
         {
             Console.WriteLine("错误：必须设置环境变量 APP_USER 和 APP_PASSWORD");
             return;
+        }
+        // 重试三次
+        for (int i = 0; i < 3; i++)
+        {
+            var cyApi = new CtYunApi(t);
+            if (!await cyApi.LoginAsync())
+            {
+                Console.Write($"重试第{i + 1}次。");
+                continue;
+            }
+            t.DesktopId = await cyApi.GetLlientListAsync();
+            connectText = await cyApi.ConnectAsync();
+            File.WriteAllText("connect.txt", connectText);
+            break;
         }
     }
     else
@@ -40,23 +102,24 @@ if (string.IsNullOrEmpty(connectText)|| connectText.IndexOf("\"desktopInfo\":nul
 
         Console.Write("请输入密码：");
         t.Password = ComputeSha256Hash(ReadPassword()); // 隐藏密码输入
-    }
-    //重试三次
-    for (int i = 0; i < 3; i++)
-    {
-
-        var cyApi = new CtYunApi(t);
-        if (!await cyApi.LoginAsync())
+        
+        // 重试三次
+        for (int i = 0; i < 3; i++)
         {
-            Console.Write($"重试第{i+1}次。");
-            continue;
+            var cyApi = new CtYunApi(t);
+            if (!await cyApi.LoginAsync())
+            {
+                Console.Write($"重试第{i + 1}次。");
+                continue;
+            }
+            t.DesktopId = await cyApi.GetLlientListAsync();
+            connectText = await cyApi.ConnectAsync();
+            File.WriteAllText("connect.txt", connectText);
+            break;
         }
-        t.DesktopId= await cyApi.GetLlientListAsync();
-        connectText = await cyApi.ConnectAsync();
-        File.WriteAllText("connect.txt", connectText);
-        break;
     }
-    if (string.IsNullOrEmpty(connectText) ||connectText.IndexOf("\"desktopInfo\":null") != -1)
+    
+    if (string.IsNullOrEmpty(connectText) || connectText.IndexOf("\"desktopInfo\":null") != -1)
     {
         Console.WriteLine("登录异常..connectText获取错误，检查电脑是否开机。");
         return;
