@@ -7,14 +7,9 @@ WORKDIR /app
 # 将构建好的发布文件复制到容器中
 COPY ./publish/ ./
 
-# 环境变量配置（用户名密码登录模式，可选）
-ENV APP_USER=defaultuser \
-    APP_PASSWORD=defaultpass
-
-# 说明：支持两种登录模式
-# 1. Session 模式：挂载 session.json 文件到 /app/session.json
-#    docker run -v /path/to/session.json:/app/session.json your-image
-# 2. 用户名密码模式：设置环境变量 APP_USER 和 APP_PASSWORD
+# 使用说明：
+# 挂载 session.json 文件到容器（包含 deviceCode、secretKey 等登录信息）
+# docker run -v /path/to/session.json:/app/session.json your-image
 
 # 启动程序
 ENTRYPOINT ["dotnet", "CtYun.dll"]
