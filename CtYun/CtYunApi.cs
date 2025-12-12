@@ -26,6 +26,7 @@ namespace CtYun
             client.DefaultRequestHeaders.Add("ctg-devicetype", loginInfo.DeviceType);
             client.DefaultRequestHeaders.Add("ctg-version", loginInfo.Version);
             client.DefaultRequestHeaders.Add("ctg-devicecode", loginInfo.DeviceCode);
+            client.DefaultRequestHeaders.Add("ctg-appmodel", "2");  // AI云电脑标识
             client.DefaultRequestHeaders.Add("referer", "https://pc.ctyun.cn/");
            
         }
@@ -92,7 +93,7 @@ namespace CtYun
             request.Headers.Add("ctg-timestamp", timestamp);
             request.Headers.Add("ctg-requestid", timestamp);
             var str = $"{loginInfo.DeviceType}{timestamp}{loginInfo.TenantId}{timestamp}{loginInfo.UserId}{loginInfo.Version}{loginInfo.SecretKey}";
-            request.Headers.Add("ctg-signaturestr", ComputeMD5(str));
+            request.Headers.Add("ctg-signaturestr", ComputeMD5(str).ToUpperInvariant());
             var content = new FormUrlEncodedContent(collection);
             request.Content = content;
             var response = await client.SendAsync(request);
@@ -108,7 +109,7 @@ namespace CtYun
             request.Headers.Add("ctg-timestamp", timestamp);
             request.Headers.Add("ctg-requestid", timestamp);
             var str = $"{loginInfo.DeviceType}{timestamp}{loginInfo.TenantId}{timestamp}{loginInfo.UserId}{loginInfo.Version}{loginInfo.SecretKey}";
-            var signature = ComputeMD5(str);
+            var signature = ComputeMD5(str).ToUpperInvariant();  // 转大写
             request.Headers.Add("ctg-signaturestr", signature);
             
             // 调试日志

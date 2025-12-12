@@ -12,8 +12,8 @@ var connectText = "";
 var t = new LoginInfo()
 {
     DeviceType = "60",
-    DeviceCode = $"web_{GenerateRandomString(32)}",
-    Version = "1020700001"
+    DeviceCode = "web_sgrllN1zCxINVbWc5IZYqQK5dJk0q4qz",  // 固定设备码，与浏览器一致
+    Version = "103020001"  // AI云电脑版本号
 };
 
 // 检查是否存在 session.json 文件（Session 登录模式）

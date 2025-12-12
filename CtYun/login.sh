@@ -1,33 +1,43 @@
 #!/bin/bash
-# 天翼云电脑 Linux 命令行登录脚本
-# 使用方法: ./login.sh <手机号> <密码>
+# 天翼云AI电脑 Linux 命令行登录脚本
+# 使用方法: ./login.sh <手机号> <密码> [deviceCode]
 
 set -e
 
 # 配置参数
 USER_PHONE="${1:-}"
 PASSWORD="${2:-}"
-OCR_URL="https://orc.1999111.xyz/ocr"  # 验证码识别服务
-MAX_RETRY=5  # 最大重试次数
+# 使用传入的 deviceCode，或使用浏览器中的固定值
+DEVICE_CODE="${3:-web_sgrllN1zCxINVbWc5IZYqQK5dJk0q4qz}"
+OCR_URL="https://orc.1999111.xyz/ocr"
+MAX_RETRY=5
+
+DEVICE_TYPE="60"
+VERSION="103020001"
+APP_MODEL="2"
 
 if [ -z "$USER_PHONE" ] || [ -z "$PASSWORD" ]; then
-    echo "用法: ./login.sh <手机号> <密码>"
+    echo "用法: ./login.sh <手机号> <密码> [deviceCode]"
+    echo "示例: ./login.sh 13980779568 yourpassword"
+    echo "或使用自定义deviceCode: ./login.sh 13980779568 yourpassword web_xxxxx"
     exit 1
 fi
-
-# 生成随机设备码
-DEVICE_CODE="web_$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
-DEVICE_TYPE="60"
-VERSION="1020700001"
 
 # 计算 SHA256 密码
 PASSWORD_HASH=$(echo -n "$PASSWORD" | sha256sum | awk '{print $1}')
 
-echo "设备码: $DEVICE_CODE"
-echo "密码哈希: $PASSWORD_HASH"
+echo "============================================"
+echo "使用固定设备码: $DEVICE_CODE"
+echo "版本: $VERSION (AI云电脑)"
+echo "============================================"
 echo ""
 
-# 登录函数（带重试）
+# 计算 MD5
+compute_md5() {
+    echo -n "$1" | md5sum | awk '{print $1}'
+}
+
+# 登录函数
 attempt_login() {
     local attempt=$1
     echo "========== 尝试第 $attempt 次 =========="
@@ -51,10 +61,11 @@ attempt_login() {
     # 步骤3: 登录
     echo ">>> 登录中..."
     LOGIN_RESULT=$(curl -s -X POST "https://desk.ctyun.cn:8810/api/auth/client/login" \
-        -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+        -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" \
         -H "ctg-devicetype: $DEVICE_TYPE" \
         -H "ctg-version: $VERSION" \
         -H "ctg-devicecode: $DEVICE_CODE" \
+        -H "ctg-appmodel: $APP_MODEL" \
         -H "referer: https://pc.ctyun.cn/" \
         -d "userAccount=$USER_PHONE" \
         -d "password=$PASSWORD_HASH" \
@@ -64,21 +75,14 @@ attempt_login() {
         -d "deviceName=Chrome浏览器" \
         -d "deviceType=$DEVICE_TYPE" \
         -d "deviceModel=Windows NT 10.0; Win64; x64" \
-        -d "appVersion=2.7.0" \
+        -d "appVersion=3.2.0" \
         -d "sysVersion=Windows NT 10.0; Win64; x64" \
         -d "clientVersion=$VERSION")
     
-    # 检查验证码错误（需要重试）
+    # 检查验证码错误
     if echo "$LOGIN_RESULT" | grep -q '"code":51030'; then
         echo "图形验证码错误，重试..."
         return 1
-    fi
-    
-    # 检查是否需要手机验证码
-    if echo "$LOGIN_RESULT" | grep -q '"needSmsValidate"\s*:\s*true'; then
-        echo ""
-        echo "⚠️  需要手机验证码，此脚本无法继续"
-        exit 1
     fi
     
     # 检查是否登录成功
@@ -86,34 +90,96 @@ attempt_login() {
         echo ""
         echo "✅ 登录成功！"
         
-        # 提取关键信息并保存到 session.json
+        # 检查设备绑定状态
+        if echo "$LOGIN_RESULT" | grep -q '"bondedDevice":true'; then
+            echo "✅ 设备已绑定"
+        else
+            echo "⚠️ 设备未绑定 (bondedDevice: false)"
+        fi
+        
+        # 提取关键信息
         USER_ACCOUNT=$(echo "$LOGIN_RESULT" | grep -oP '"userAccount"\s*:\s*"\K[^"]+')
         USER_ID=$(echo "$LOGIN_RESULT" | grep -oP '"userId"\s*:\s*\K[0-9]+')
         TENANT_ID=$(echo "$LOGIN_RESULT" | grep -oP '"tenantId"\s*:\s*\K[0-9]+')
         SECRET_KEY=$(echo "$LOGIN_RESULT" | grep -oP '"secretKey"\s*:\s*"\K[^"]+')
         
-        cat > session.json << EOF
+        echo ""
+        echo ">>> 测试获取设备列表..."
+        
+        # 计算签名
+        TIMESTAMP=$(date +%s%3N)
+        SIGN_STR="${DEVICE_TYPE}${TIMESTAMP}${TENANT_ID}${TIMESTAMP}${USER_ID}${VERSION}${SECRET_KEY}"
+        SIGNATURE=$(compute_md5 "$SIGN_STR")
+        SIGNATURE_UPPER=$(echo "$SIGNATURE" | tr 'a-z' 'A-Z')
+        
+        # 调用设备列表 API
+        DEVICE_LIST=$(curl -s \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36" \
+            -H "ctg-devicetype: $DEVICE_TYPE" \
+            -H "ctg-version: $VERSION" \
+            -H "ctg-devicecode: $DEVICE_CODE" \
+            -H "ctg-appmodel: $APP_MODEL" \
+            -H "ctg-userid: $USER_ID" \
+            -H "ctg-tenantid: $TENANT_ID" \
+            -H "ctg-timestamp: $TIMESTAMP" \
+            -H "ctg-requestid: $TIMESTAMP" \
+            -H "ctg-signaturestr: $SIGNATURE_UPPER" \
+            -H "referer: https://pc.ctyun.cn/" \
+            "https://desk.ctyun.cn:8810/api/desktop/client/list")
+        
+        echo "设备列表响应: $DEVICE_LIST"
+        
+        # 检查设备列表是否成功
+        if echo "$DEVICE_LIST" | grep -q '"desktopId"'; then
+            echo ""
+            echo "✅ 获取设备列表成功！"
+            
+            DESKTOP_ID=$(echo "$DEVICE_LIST" | grep -oP '"desktopId"\s*:\s*"\K[^"]+' | head -1)
+            echo "DesktopId: $DESKTOP_ID"
+            
+            cat > session.json << EOF
 {
     "userAccount": "$USER_ACCOUNT",
     "userId": $USER_ID,
     "tenantId": $TENANT_ID,
     "secretKey": "$SECRET_KEY",
     "mobilephone": "$USER_PHONE",
-    "deviceCode": "$DEVICE_CODE"
+    "deviceCode": "$DEVICE_CODE",
+    "desktopId": "$DESKTOP_ID",
+    "version": "$VERSION"
 }
 EOF
+            echo "session.json 已生成"
+        else
+            echo ""
+            echo "⚠️ 设备列表获取失败，尝试直接使用已知的 desktopId..."
+            
+            # 硬编码已知的 desktopId
+            DESKTOP_ID="22130831"
+            
+            cat > session.json << EOF
+{
+    "userAccount": "$USER_ACCOUNT",
+    "userId": $USER_ID,
+    "tenantId": $TENANT_ID,
+    "secretKey": "$SECRET_KEY",
+    "mobilephone": "$USER_PHONE",
+    "deviceCode": "$DEVICE_CODE",
+    "desktopId": "$DESKTOP_ID",
+    "version": "$VERSION"
+}
+EOF
+            echo "session.json 已生成（使用固定 desktopId: $DESKTOP_ID）"
+        fi
         
-        echo "session.json 已生成:"
-        cat session.json
         return 0
     fi
     
-    # 其他错误
     echo "登录失败: $LOGIN_RESULT"
     return 1
 }
 
-# 执行登录（自动重试）
+# 执行登录
 for i in $(seq 1 $MAX_RETRY); do
     if attempt_login $i; then
         exit 0
