@@ -150,13 +150,32 @@ namespace CtYun
             try
             {
                 var result = await GetEncryptionAsync("https://desk.ctyun.cn:8810/api/desktop/client/list");
+                Console.WriteLine("设备列表响应: " + result);
+                
                 var resultJson = JsonSerializer.Deserialize(result, AppJsonSerializerContext.Default.ClientInfo);
+                
+                if (resultJson == null)
+                {
+                    Console.WriteLine("错误：设备列表响应解析失败（resultJson 为空）");
+                    return null;
+                }
+                if (resultJson.data == null)
+                {
+                    Console.WriteLine("错误：设备列表响应中 data 为空");
+                    return null;
+                }
+                if (resultJson.data.desktopList == null || resultJson.data.desktopList.Count == 0)
+                {
+                    Console.WriteLine("错误：未找到可用的云电脑设备（desktopList 为空或无设备）");
+                    return null;
+                }
+                
                 return resultJson.data.desktopList[0].desktopId;
             }
             catch (Exception ex)
             {
-                Console.WriteLine("获取设备信息错误。"+ex.Message);
-                return null; 
+                Console.WriteLine("获取设备信息错误。" + ex.Message);
+                return null;
             }
         }
 
