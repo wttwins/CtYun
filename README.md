@@ -4,12 +4,11 @@
 
 ### docker使用指南
 
-```
-docker run -d \
-  --name ctyun \
-  -e APP_USER="你的账号" \
-  -e APP_PASSWORD='你的密码' \
-  su3817807/ctyun:latest
+# 1. 运行登录脚本生成 session.json
+./login.sh 手机号 密码
+
+# 2. 使用生成的 session.json 运行 Docker
+ docker run -d   --name ctyun   -v $(pwd)/session.json:/app/session.json wttwins/ctyun:latest
 
 ```
 ```
