@@ -1,21 +1,7 @@
 {
     "userAccount": "ydn_c_20251212_b7vs82",
     "userId": 17531421,
-    "userEid": "f3f147ebffd836b72effe8a600559e49",
-    "userName": "13980779568",
-    "email": null,
-    "mobilephone": "13980779568",
     "tenantId": 15,
-    "tenantName": "CTGITGD",
     "secretKey": "65ede4435d6347bdaec31ff6c0c74895",
-    "bondedDevice": true,
-    "realNameStatus": 3,
-    "hasPassword": 1,
-    "timestamp": 1765498040589,
-    "needSmsValidate": false,
-    "twoFaValidateType": null,
-    "needBindVirtualMfa": null,
-    "needUpdatePassword": false,
-    "loginAccount": "13980779568",
-    "logined": true
+    "mobilephone": "13980779568"
 }
