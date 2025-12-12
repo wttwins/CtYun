@@ -108,7 +108,18 @@ namespace CtYun
             request.Headers.Add("ctg-timestamp", timestamp);
             request.Headers.Add("ctg-requestid", timestamp);
             var str = $"{loginInfo.DeviceType}{timestamp}{loginInfo.TenantId}{timestamp}{loginInfo.UserId}{loginInfo.Version}{loginInfo.SecretKey}";
-            request.Headers.Add("ctg-signaturestr", ComputeMD5(str));
+            var signature = ComputeMD5(str);
+            request.Headers.Add("ctg-signaturestr", signature);
+            
+            // 调试日志
+            Console.WriteLine($"[DEBUG] URL: {url}");
+            Console.WriteLine($"[DEBUG] DeviceType={loginInfo.DeviceType}, DeviceCode={loginInfo.DeviceCode}");
+            Console.WriteLine($"[DEBUG] UserId={loginInfo.UserId}, TenantId={loginInfo.TenantId}");
+            Console.WriteLine($"[DEBUG] Timestamp={timestamp}, Version={loginInfo.Version}");
+            Console.WriteLine($"[DEBUG] SecretKey={loginInfo.SecretKey}");
+            Console.WriteLine($"[DEBUG] SignatureStr原文={str}");
+            Console.WriteLine($"[DEBUG] SignatureMD5={signature}");
+            
             var response = await client.SendAsync(request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadAsStringAsync();
